@@ -6,6 +6,7 @@ from flask import request, jsonify, Response
 from app import app, mongo
 from bson.json_util import dumps
 from bson.json_util import loads
+from bson import ObjectId
 import logger
 
 ROOT_PATH = os.environ.get('ROOT_PATH')
@@ -31,14 +32,18 @@ def insertDevice():
         return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
 
 @app.route('/data-handler', methods=['GET', 'POST', 'DELETE', 'PATCH'])
-def user():
+def dataHandler():
     x = {}
     if request.method == 'GET':
         query = request.args
-        users_id = mongo.db.users.find_one(query['users'])
-        foo = {'users': users_id}
-        foo = loads(dumps(mongo.db.devices.find(users_id)))
-        #print("Foo", dumps(foo), file=sys.stderr)
+        users_id = mongo.db.users.find_one({"email": query['users']})['_id']
+        #print("users_id", users_id, file=sys.stderr)
+
+        bar = mongo.db.users.find_one({"email": query['users']})['askFor']
+        id = {'users': users_id}
+        foo = loads(dumps(mongo.db.devices.find(id)))
+        foo.append({'askFor': bar})
+        #print("Foo", foo, file=sys.stderr)
         return dumps(foo), 200
 
     data = request.get_json()
@@ -75,9 +80,17 @@ def user():
 def sharedevice():
     data = request.get_json()
     if request.method == 'POST':
-        foo = mongo.db.users.find_one({'email': data['shareUser']})
-        mongo.db.devices.update({'devicekey': data["devicekey"]}, {'$push': {'users': foo['_id']}})
-        return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
+        print("share device general", data['entry'], file=sys.stderr)
+        if data['entry'] == 'no':
+            print("share device:", data['entry'], file=sys.stderr)
+            mongo.db.users.update_one({'email': data['shareUser']}, {'$set': {'askFor': data["askFor"]}})
+            return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
+        elif data['entry'] == 'yes':
+            print("share device:", data['shareUser'], file=sys.stderr)
+            foo = mongo.db.users.find_one({'email': data['shareUser']})
+            mongo.db.devices.update({'devicekey': data["devicekey"]}, {'$push': {'users': foo['_id']}})
+            return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
+        
 
 @app.route('/create-user', methods=['GET', 'POST', 'DELETE', 'PATCH'])
 def createUser():
@@ -86,3 +99,11 @@ def createUser():
         print(data, file=sys.stderr)
         mongo.db.users.insert_one(data)
         return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
+
+@app.route('/notification', methods=['GET', 'POST', 'DELETE', 'PATCH'])
+def notification():
+    data = request.get_json()
+    if request.method == 'GET':
+        query = request.args
+        mongo.db.users.update_one({'email': query['user']}, {'$set': {'askFor': ""}})
+        return jsonify({ 'title': 'Geräteanfrage', 'message': query['user'] + ' möchte ein Gerät mit Dir teilen'}), 200
