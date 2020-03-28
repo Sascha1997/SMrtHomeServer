@@ -37,12 +37,11 @@ def dataHandler():
     if request.method == 'GET':
         query = request.args
         users_id = mongo.db.users.find_one({"email": query['users']})['_id']
-        #print("users_id", users_id, file=sys.stderr)
-
-        bar = mongo.db.users.find_one({"email": query['users']})['askFor']
-        id = {'users': users_id}
-        foo = loads(dumps(mongo.db.devices.find(id)))
-        foo.append({'askFor': bar})
+        askFor = mongo.db.users.find_one({"email": query['users']})['askFor']
+        nickname = mongo.db.users.find_one({"email": query['users']})['nickname']
+        foo = loads(dumps(mongo.db.devices.find({'users': users_id})))
+        foo.append({'askFor': askFor})
+        foo.append({'nickname': nickname})
         #print("Foo", foo, file=sys.stderr)
         return dumps(foo), 200
 
@@ -76,21 +75,35 @@ def dataHandler():
         else:
             return jsonify({'ok': False, 'message': 'Bad request parameters!'}), 400
 
-@app.route('/share-device', methods=['POST'])
-def sharedevice():
+
+share ={
+    "devicekey" : '',
+    "shareUser": ''
+}
+
+@app.route('/share-device-sending', methods=['POST'])
+def shareSeviceSending():
     data = request.get_json()
+
+    share["devicekey"] = data['devicekey']
+    share["shareUser"] = data['shareUser']
+
     if request.method == 'POST':
-        print("share device general", data['entry'], file=sys.stderr)
-        if data['entry'] == 'no':
-            print("share device:", data['entry'], file=sys.stderr)
-            mongo.db.users.update_one({'email': data['shareUser']}, {'$set': {'askFor': data["askFor"]}})
-            return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
-        elif data['entry'] == 'yes':
-            print("share device:", data['shareUser'], file=sys.stderr)
-            foo = mongo.db.users.find_one({'email': data['shareUser']})
-            mongo.db.devices.update({'devicekey': data["devicekey"]}, {'$push': {'users': foo['_id']}})
-            return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
-        
+        print("share device:", data['shareUser'], data["askFor"], file=sys.stderr)
+
+        mongo.db.users.update_one({'email': data['shareUser']}, {'$set': {'askFor': data["askFor"]}})
+        return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
+
+
+@app.route('/share-device-recieving', methods=['GET', 'POST', 'DELETE', 'PATCH'])
+def shareDeviceRecieving():
+
+    print("def shareDeviceRecieving: ", share["shareUser"], share["devicekey"], file=sys.stderr)
+    foo = mongo.db.users.find_one({'email': share["shareUser"]})
+    mongo.db.devices.update({'devicekey': share["devicekey"]}, {'$push': {'users': foo['_id']}})
+    return jsonify({'ok': True, 'message': 'User created successfully!'}), 200
+
+    
 
 @app.route('/create-user', methods=['GET', 'POST', 'DELETE', 'PATCH'])
 def createUser():
